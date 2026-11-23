@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "arm": "augmented",
+  "parameters": 2340098,
+  "head_parameters": 82114,
+  "checked_original_images": 4,
+  "cached_direct_max_error": 0.0,
+  "reload_max_error": 0.0,
+  "inference": "Single RGB view, no test-time augmentation and no rejection"
+}

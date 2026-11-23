@@ -33,21 +33,21 @@ Following the reference notebook [4], sorted image paths are split by holding ou
 
 #### 2.3.1 MobileNetV2
 
-MobileNetV2 uses inverted residuals and linear bottlenecks for efficient feature extraction [2]. Following Study One [1], [4], the Keras ImageNet backbone [5] is frozen and its original classifier removed. RGB images are resized to 224 × 224 and scaled to [0, 1], without online augmentation. The head applies 4 × 4 average pooling, flattening, a 64-unit ReLU layer, dropout of 0.5 and two-unit softmax classification.
+The Study One baseline [1], [4] freezes an ImageNet MobileNetV2 backbone [2], [5]. RGB inputs are resized to 224 × 224 and divided by 255. The head uses 4 × 4 average pooling, flattening, 64 ReLU units, dropout of 0.5 and a two-class softmax.
 
-Adam, SGD and RMSprop each train a freshly initialized head for 50 epochs, using batch size 30, learning rate 0.001 and binary cross-entropy. Seed 42 fixes initialization and splitting. The final epoch is evaluated using accuracy, precision, recall, F1 and ROC-AUC, with defects treated as positive.
+Each optimizer trains for 50 epochs with batch size 30, learning rate 0.001 and binary cross-entropy. We use seed 42 and evaluate the final epoch.
 
-The backbone and training design come from Keras and AM3d [4], [5]. Newly written reproduction scripts handle checksum verification, split export, cached feature extraction, optimizer runs, metric export and prediction.
+Project extension. We adapted the EfficientNetB0 team's robustness protocol [6] to MobileNetV2 on the shared Study One split. Both arms use the same architecture, initialization and image order for each of seeds 42, 43 and 44. Each arm uses Adam for 30 epochs and 210 updates. The clean arm uses original images. The augmented arm samples one of five views per image per epoch: original, blurred, JPEG compressed, downsampled or rotated. Brightness changes are held out of training.
 
-Algorithm 1  Reproduction pseudocode
+Algorithm 1  Paired robustness training
 
-1  Load labelled images and split the dataset.
+1  Extract frozen features for each training view.
 
-2  Resize, scale and extract frozen backbone features.
+2  For each seed, train both heads with the same image order.
 
-3  For each optimizer, initialize and train the classifier.
+3  Select the arm using validation F1 and recall.
 
-4  Evaluate test predictions and export metrics.
+4  Evaluate both arms on seven test conditions.
 
 #### 2.3.2 Other Models
 
@@ -55,7 +55,7 @@ Algorithm 1  Reproduction pseudocode
 
 ### 3.1 MobileNetV2
 
-Table 2 compares our test accuracy with the corresponding Study One results [1], [4]. Adam and RMSprop classify all 55 test images correctly; SGD misses one of 28 defects. All three accuracies match the published values to two decimal places.
+The original reproduction matches the corresponding Study One accuracies [1], [4]. Adam and RMSprop classify all 55 images correctly. SGD misses one defect.
 
 Table 2  MobileNetV2 reproduction versus Study One
 
@@ -65,9 +65,22 @@ Table 2  MobileNetV2 reproduction versus Study One
 | SGD | 98.18 | 98.18 | 0.00 |
 | RMSprop | 100.00 | 100.00 | 0.00 |
 
-Adam and RMSprop achieve the highest test accuracy under the fixed training settings. These results support effective transfer learning on this dataset, although one split and 55 test images provide limited evidence of generalization to independently printed objects. Differences in Table 2 are percentage points (pp).
+The validation rule selected augmentation after mean F1 rose from 0.908 to 0.995, with clean F1 maintained and worst-condition recall improved. Selection preceded test scoring.
 
-Optimizer choice is the tested parameter variation. Further learning-rate or dropout tuning should use validation performance, reserving test data for final evaluation; such tuning has not yet been tested.
+Table 3  Mean test accuracy across three seeds (%)
+
+| Test condition | Clean training | Augmented | Change (pp) |
+| --- | --- | --- | --- |
+| Clean | 100.00 | 100.00 | 0.00 |
+| Dark (×0.5) | 97.58 | 98.18 | +0.61 |
+| Bright (×1.5) | 100.00 | 98.18 | -1.82 |
+| Blur (9 × 9, σ = 2) | 83.03 | 100.00 | +16.97 |
+| JPEG quality 15 | 90.30 | 100.00 | +9.70 |
+| Downsample to 56 × 56 | 93.33 | 100.00 | +6.67 |
+| Rotate 10° | 100.00 | 100.00 | 0.00 |
+| Seven-condition mean | 94.89 | 99.48 | +4.59 |
+
+Augmentation raises mean test accuracy by 4.59 percentage points. Blur shows the largest gain, clean accuracy stays at 100%, and bright-image accuracy falls. The seven conditions reuse the same 55 images. These synthetic tests do not establish performance on new print runs.
 
 ### 3.2 Other Models
 
@@ -82,3 +95,5 @@ Optimizer choice is the tested parameter variation. Further learning-rate or dro
 [4] M. M. Ahsan, “AM3d,” GitHub, commit dd1025d. Accessed: Nov. 20, 2026. [Online]. Available: https://github.com/mahsan2/AM3d
 
 [5] Keras, “MobileNet models,” Keras documentation. Accessed: Nov. 20, 2026. [Online]. Available: https://keras.io/api/applications/mobilenet/mobilenet_models/
+
+[6] AHJ8273528, “IDAT7215-EfficientNetB0,” GitHub, commit c48cdc9. Accessed: Nov. 23, 2026. [Online]. Available: https://github.com/AHJ8273528/IDAT7215-EfficientNetB0

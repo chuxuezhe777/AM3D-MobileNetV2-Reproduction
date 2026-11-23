@@ -1,0 +1,8 @@
+{
+  "prediction_records_verified": 3444,
+  "condition_metrics_verified": 84,
+  "same_initialization_and_sample_order": true,
+  "optimizer_updates_per_fit": 210,
+  "repeat_run_metric_files_identical": true,
+  "selected_model_sha256": "f9ff078a7cf4af970095edbe67f16220be8f17e129301e002e0c673988bf8c23"
+}

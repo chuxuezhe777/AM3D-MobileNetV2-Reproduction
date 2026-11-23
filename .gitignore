@@ -8,6 +8,7 @@ __pycache__/
 # Downloaded source images and new experiment runs
 AMdataset/
 runs/
+robust-runs/
 *.part
 # Local credentials and editor files
 .env

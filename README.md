@@ -35,9 +35,9 @@ Following the reference notebook [4], sorted image paths are split by holding ou
 
 The Study One baseline [1], [4] freezes an ImageNet MobileNetV2 backbone [2], [5]. RGB inputs are resized to 224 × 224 and divided by 255. The head uses 4 × 4 average pooling, flattening, 64 ReLU units, dropout of 0.5 and a two-class softmax.
 
-Each optimizer trains for 50 epochs with batch size 30, learning rate 0.001 and binary cross-entropy. We use seed 42 and evaluate the final epoch.
+The authors' reference setup uses batch size 30, learning rate 0.001 and binary cross-entropy. The robustness experiment retains those settings and trains each arm for 30 epochs.
 
-Project extension. We adapted the EfficientNetB0 team's robustness protocol [6] to MobileNetV2 on the shared Study One split. Both arms use the same architecture, initialization and image order for each of seeds 42, 43 and 44. Each arm uses Adam for 30 epochs and 210 updates. The clean arm uses original images. The augmented arm samples one of five views per image per epoch: original, blurred, JPEG compressed, downsampled or rotated. Brightness changes are held out of training.
+Project extension. We adapted the EfficientNetB0 team's robustness protocol [6] to MobileNetV2 on the shared Study One split. For Adam, SGD and RMSprop, the two arms share initialization, image order and 210 updates per seed. The clean arm uses original images. The augmented arm samples one view per image per epoch from originals, blur, JPEG compression, downsampling and rotation. Brightness changes are held out of training.
 
 Algorithm 1  Paired robustness training
 
@@ -45,9 +45,9 @@ Algorithm 1  Paired robustness training
 
 2  For each seed, train both heads with the same image order.
 
-3  Select the arm using validation F1 and recall.
+3  Record the validation decision using F1 and defect recall.
 
-4  Evaluate both arms on seven test conditions.
+4  Compare augmented clean-image accuracy with Study One for each optimizer.
 
 #### 2.3.2 Other Models
 
@@ -55,32 +55,17 @@ Algorithm 1  Paired robustness training
 
 ### 3.1 MobileNetV2
 
-The original reproduction matches the corresponding Study One accuracies [1], [4]. Adam and RMSprop classify all 55 images correctly. SGD misses one defect.
+Table 2 compares the augmented MobileNetV2 with the authors' Study One result for each optimizer on clean test images [1], [4]. Our accuracy is averaged over seeds 42, 43 and 44 on the same fixed split. The paper column reports the corresponding published accuracy.
 
-Table 2  MobileNetV2 reproduction versus Study One
+Table 2  Augmented MobileNetV2 versus the original Study One results
 
-| Optimizer | Our accuracy % | Paper accuracy % | Difference pp |
+| Optimizer | Augmented accuracy (%) | Paper accuracy (%) | Change (pp) |
 | --- | --- | --- | --- |
 | Adam | 100.00 | 100.00 | 0.00 |
-| SGD | 98.18 | 98.18 | 0.00 |
-| RMSprop | 100.00 | 100.00 | 0.00 |
+| SGD | 98.79 | 98.18 | +0.61 |
+| RMSprop | 99.39 | 100.00 | -0.61 |
 
-The validation rule selected augmentation after mean F1 rose from 0.908 to 0.995, with clean F1 maintained and worst-condition recall improved. Selection preceded test scoring.
-
-Table 3  Mean test accuracy across three seeds (%)
-
-| Test condition | Clean training | Augmented | Change (pp) |
-| --- | --- | --- | --- |
-| Clean | 100.00 | 100.00 | 0.00 |
-| Dark (×0.5) | 97.58 | 98.18 | +0.61 |
-| Bright (×1.5) | 100.00 | 98.18 | -1.82 |
-| Blur (9 × 9, σ = 2) | 83.03 | 100.00 | +16.97 |
-| JPEG quality 15 | 90.30 | 100.00 | +9.70 |
-| Downsample to 56 × 56 | 93.33 | 100.00 | +6.67 |
-| Rotate 10° | 100.00 | 100.00 | 0.00 |
-| Seven-condition mean | 94.89 | 99.48 | +4.59 |
-
-Augmentation raises mean test accuracy by 4.59 percentage points. Blur shows the largest gain, clean accuracy stays at 100%, and bright-image accuracy falls. The seven conditions reuse the same 55 images. These synthetic tests do not establish performance on new print runs.
+Relative to the paper, the nonzero accuracy differences are SGD (+0.61 pp), RMSprop (-0.61 pp). The experiment changes the training views and uses paired repeats, so the table compares accuracy under the same optimizer and clean image condition. The paper provides no matching corruption scores. The fixed test split does not establish performance on independent print runs.
 
 ### 3.2 Other Models
 
@@ -97,3 +82,26 @@ Augmentation raises mean test accuracy by 4.59 percentage points. Blur shows the
 [5] Keras, “MobileNet models,” Keras documentation. Accessed: Nov. 20, 2026. [Online]. Available: https://keras.io/api/applications/mobilenet/mobilenet_models/
 
 [6] AHJ8273528, “IDAT7215-EfficientNetB0,” GitHub, commit c48cdc9. Accessed: Nov. 23, 2026. [Online]. Available: https://github.com/AHJ8273528/IDAT7215-EfficientNetB0
+
+## Running the experiment
+
+Use Python 3.12. Run these commands from the project directory:
+
+```sh
+python -m pip install keras==3.15.1 torch==2.8.0 ml-dtypes==0.5.3 numpy==2.1.3 scikit-learn==1.6.1 opencv-python-headless==4.11.0.86
+python mobilenetv2.py prepare
+python mobilenetv2.py train
+python mobilenetv2.py predict --model runs/augmented_adam_seed42.keras --image AMdataset/dataset/badcylinder/IMG_9191.JPG
+```
+
+The first command installs the dependencies in the active Python environment. The second downloads the pinned AMdataset images and verifies them. Initial training downloads Keras ImageNet weights. Use `--weights` with a local no-top MobileNetV2 weights file or `--data` with an existing dataset directory. The script recreates the fixed Study One split with seed 42, runs matched clean and augmented fits for three seeds per optimizer, and writes the trained models and audit files to `runs/`.
+
+`runs/paper_comparison.csv` contains the clean-image comparison shown above. Validation decisions, per-image predictions and scores for synthetic conditions are generated as audit evidence. Use a fresh path with `train --out another-run` for subsequent runs.
+
+## RMSprop repeat
+
+A second RMSprop run with the same split, initial weights, and seeds reproduced all 3,444 per-image validation and test predictions. The augmented mean clean-image accuracy was **99.39%**, compared with **100.00%** in the original Study One. Seeds 42 and 44 scored 55/55. Seed 43 scored 54/55 and again misclassified the normal image `goodcylinder/IMG_8933.JPG` as defective.
+
+Repeat this check with `python mobilenetv2.py train --optimizer rmsprop --out rmsprop-repeat`.
+
+The project report is `MobileNetV2_Report.docx`.

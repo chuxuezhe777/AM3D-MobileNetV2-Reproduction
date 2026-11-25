@@ -4,7 +4,7 @@
 
 Visual inspection supports quality control in additive manufacturing by identifying defective printed parts. Training deep neural networks from scratch requires substantial labelled data, whereas transfer learning reuses features learned from larger image collections. Ahsan et al. [1] investigated this approach for classifying photographs of 3D printed objects as defective or normal.
 
-This group project reproduces the published workflow using the authors' AMdataset and AM3d repositories [3], [4]. Group members implement different pretrained convolutional neural networks on a shared dataset. The project examines whether the reported classification performance can be reproduced and how model and optimizer choices affect the results. The task is image classification, with one predicted label per photograph.
+This group project reproduces the workflow published by Ahsan et al. [1], [4]. Group members implement different pretrained convolutional neural networks using shared data and evaluation protocols. The project examines how transfer learning and optimizer choice affect image-level defect classification across the three experimental datasets.
 
 Python supports the implementation through Keras for pretrained networks and training, OpenCV for image processing, NumPy for numerical operations, and scikit-learn for splitting and evaluation.
 
@@ -14,40 +14,29 @@ Python supports the implementation through Keras for pretrained networks and tra
 
 The objective is to reproduce transfer learning results for binary defect classification. Supervised learning maps labelled photographs to defective or normal classes. Pretrained networks extract visual features, and task-specific classifiers learn from the training subset. Performance is assessed against the corresponding published experiment.
 
-### 2.2 Shared Dataset
+### 2.2 Shared Datasets
 
-All models use Dataset One from AMdataset [3], comprising cylinder photographs labelled as defective or normal. The working collection contains 271 images, including 136 defective and 135 normal examples. Table 1 documents the split used in the completed MobileNetV2 experiment.
+Study One uses original cylinder photographs from AMdataset. Study Two uses the authors' augmented cylinder collection, in which normal images outnumber defects. Study Three uses a separate collection of 3D printing images from Kaggle [3], [6]. Each study uses a separate training, validation and test split.
 
-Table 1  Dataset composition and experimental split
+Table 1  Shared datasets and experimental splits
 
-| Subset | Defective | Normal | Total |
-| --- | --- | --- | --- |
-| Training | 92 | 97 | 189 |
-| Validation | 16 | 11 | 27 |
-| Test | 28 | 27 | 55 |
-| Total | 136 | 135 | 271 |
+| Study | Defective | Normal | Training | Validation | Test |
+| --- | --- | --- | --- | --- | --- |
+| One | 136 | 135 | 189 | 27 | 55 |
+| Two | 947 | 2,070 | 2,111 | 308 | 598 |
+| Three | 759 | 798 | 1,089 | 159 | 309 |
 
-Following the reference notebook [4], sorted image paths are split by holding out 30%, then allocating 66% of that subset to testing. Both operations use random_state = 42 without stratification. Validation data monitor training, while test data evaluate the final model.
+Within each study, the sorted image paths were split with seed 42. The first split held out 30% of images, and the second assigned 66% of the holdout to the test set [4], [7].
 
 ### 2.3 Model
 
 #### 2.3.1 MobileNetV2
 
-The Study One baseline [1], [4] freezes an ImageNet MobileNetV2 backbone [2], [5]. RGB inputs are resized to 224 × 224 and divided by 255. The head uses 4 × 4 average pooling, flattening, 64 ReLU units, dropout of 0.5 and a two-class softmax.
+The reference freezes ImageNet MobileNetV2 [2], scales RGB to [0, 1] and uses 4 × 4 average pooling. All runs share a 64-unit ReLU layer, 0.5 dropout and binary softmax.
 
-The authors' reference setup uses batch size 30, learning rate 0.001 and binary cross-entropy. The robustness experiment retains those settings and trains each arm for 30 epochs.
+The fusion model scales inputs to [−1, 1] [5] and combines each channel's 7 × 7 mean (75%) with its four strongest responses averaged (25%). The resulting 1,280 features preserve the head size.
 
-Project extension. We adapted the EfficientNetB0 team's robustness protocol [6] to MobileNetV2 on the shared Study One split. For Adam, SGD and RMSprop, the two arms share initialization, image order and 210 updates per seed. The clean arm uses original images. The augmented arm samples one view per image per epoch from originals, blur, JPEG compression, downsampling and rotation. Brightness changes are held out of training.
-
-Algorithm 1  Paired robustness training
-
-1  Extract frozen features for each training view.
-
-2  For each seed, train both heads with the same image order.
-
-3  Record the validation decision using F1 and defect recall.
-
-4  Compare augmented clean-image accuracy with Study One for each optimizer.
+We compare reference, global average pooling and fusion with Adam, SGD and RMSprop. Each uses seeds 42–44, learning rate 0.001 and binary cross-entropy. Epochs/batch sizes are 30/8, 50/50 and 30/30. The global average control uses corrected input scaling.
 
 #### 2.3.2 Other Models
 
@@ -55,17 +44,23 @@ Algorithm 1  Paired robustness training
 
 ### 3.1 MobileNetV2
 
-Table 2 compares the augmented MobileNetV2 with the authors' Study One result for each optimizer on clean test images [1], [4]. Our accuracy is averaged over seeds 42, 43 and 44 on the same fixed split. The paper column reports the corresponding published accuracy.
+Each cell shows fusion (top, three-seed mean) and paper (bottom) [4], scaled by 100. Precision, recall, F1 and AP use normal as positive. Defect recall is the authors' specificity.
 
-Table 2  Augmented MobileNetV2 versus the original Study One results
+Table 2  Fusion MobileNetV2 and author test scores
 
-| Optimizer | Augmented accuracy (%) | Paper accuracy (%) | Change (pp) |
-| --- | --- | --- | --- |
-| Adam | 100.00 | 100.00 | 0.00 |
-| SGD | 98.79 | 98.18 | +0.61 |
-| RMSprop | 99.39 | 100.00 | -0.61 |
+| Study and optimizer | Acc. | Prec. | Recall | F1 | Defect recall | MCC | Kappa | AUC | AP |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| One  Adam | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 |
+| One  SGD | 100.00 / 98.18 | 100.00 / 96.55 | 100.00 / 100.00 | 100.00 / 98.25 | 100.00 / 96.30 | 100.00 / 96.42 | 100.00 / 96.36 | 100.00 / 100.00 | 100.00 / 100.00 |
+| One  RMSprop | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 | 100.00 / 100.00 |
+| Two  Adam | 99.78 / 99.33 | 99.67 / 99.02 | 100.00 / 100.00 | 99.83 / 99.51 | 99.33 / 97.95 | 99.50 / 98.48 | 99.50 / 98.47 | 100.00 / 99.74 | 100.00 / 99.75 |
+| Two  SGD | 99.28 / 99.33 | 98.93 / 99.02 | 100.00 / 100.00 | 99.46 / 99.51 | 97.81 / 97.95 | 98.37 / 98.48 | 98.35 / 98.47 | 100.00 / 99.90 | 100.00 / 99.95 |
+| Two  RMSprop | 99.94 / 99.83 | 99.92 / 99.75 | 100.00 / 100.00 | 99.96 / 99.88 | 99.83 / 99.49 | 99.87 / 99.62 | 99.87 / 99.62 | 100.00 / 100.00 | 100.00 / 100.00 |
+| Three  Adam | 100.00 / 99.35 | 100.00 / 98.73 | 100.00 / 100.00 | 100.00 / 99.36 | 100.00 / 98.69 | 100.00 / 98.71 | 100.00 / 98.71 | 100.00 / 99.98 | 100.00 / 99.98 |
+| Three  SGD | 98.49 / 95.15 | 97.51 / 95.48 | 99.57 / 94.87 | 98.52 / 95.18 | 97.39 / 95.42 | 97.01 / 90.29 | 96.98 / 90.29 | 99.95 / 99.44 | 99.95 / 99.45 |
+| Three  RMSprop | 100.00 / 99.35 | 100.00 / 98.73 | 100.00 / 100.00 | 100.00 / 99.36 | 100.00 / 98.69 | 100.00 / 98.71 | 100.00 / 98.71 | 100.00 / 99.97 | 100.00 / 99.98 |
 
-Relative to the paper, the nonzero accuracy differences are SGD (+0.61 pp), RMSprop (-0.61 pp). The experiment changes the training views and uses paired repeats, so the table compares accuracy under the same optimizer and clean image condition. The paper provides no matching corruption scores. The fixed test split does not establish performance on independent print runs.
+Accuracy rose in 6 settings, tied in 2 and fell in 1. Changes ranged from -0.06 pp (Two, SGD) to +3.34 pp (Three, SGD). Fusion beat matched global averaging in 2 of nine settings. Study Two's results use image-level splits.
 
 ### 3.2 Other Models
 
@@ -81,27 +76,35 @@ Relative to the paper, the nonzero accuracy differences are SGD (+0.61 pp), RMSp
 
 [5] Keras, “MobileNet models,” Keras documentation. Accessed: Nov. 20, 2026. [Online]. Available: https://keras.io/api/applications/mobilenet/mobilenet_models/
 
-[6] AHJ8273528, “IDAT7215-EfficientNetB0,” GitHub, commit c48cdc9. Accessed: Nov. 23, 2026. [Online]. Available: https://github.com/AHJ8273528/IDAT7215-EfficientNetB0
+[6] justin900429, “3D-Printer Defected Dataset,” Kaggle, version 1. [Online]. Available: https://www.kaggle.com/datasets/justin900429/3d-printer-defected-dataset
 
-## Running the experiment
+[7] RachelYim67, “IDAT7215-3D-Defect-Detection,” GitHub. [Online]. Available: https://github.com/RachelYim67/IDAT7215-3D-Defect-Detection
 
-Use Python 3.12. Run these commands from the project directory:
+## Run the three studies
+
+Keep the three Python files together. Each is an entry point for the named study.
+Study Two and Study Three import the common training and evaluation functions from Study One.
+Run the commands with Python 3.12.
 
 ```sh
 python -m pip install keras==3.15.1 torch==2.8.0 ml-dtypes==0.5.3 numpy==2.1.3 scikit-learn==1.6.1 opencv-python-headless==4.11.0.86
-python mobilenetv2.py prepare
-python mobilenetv2.py train
-python mobilenetv2.py predict --model runs/augmented_adam_seed42.keras --image AMdataset/dataset/badcylinder/IMG_9191.JPG
+python mobilenetv2_study_one.py train
+python mobilenetv2_study_two.py train
+python mobilenetv2_study_three.py train
 ```
 
-The first command installs the dependencies in the active Python environment. The second downloads the pinned AMdataset images and verifies them. Initial training downloads Keras ImageNet weights. Use `--weights` with a local no-top MobileNetV2 weights file or `--data` with an existing dataset directory. The script recreates the fixed Study One split with seed 42, runs matched clean and augmented fits for three seeds per optimizer, and writes the trained models and audit files to `runs/`.
+Studies One and Two share the pinned AMdataset ZIP. Study Three downloads Kaggle version 1.
+All runs verify the shared image inventory. Use `--archive` to reuse a downloaded ZIP,
+`--data` for files under the two class directories, or `--weights` for the Keras no-top
+MobileNetV2 ImageNet weights. The default run directory is `runs/study_one`,
+`runs/study_two` or `runs/study_three`. Use a fresh `--out` directory for each repeat.
 
-`runs/paper_comparison.csv` contains the clean-image comparison shown above. Validation decisions, per-image predictions and scores for synthetic conditions are generated as audit evidence. Use a fresh path with `train --out another-run` for subsequent runs.
+Each run writes `paper_comparison.csv`, `metrics.csv`, `predictions.csv`, `split.csv` and
+nine fusion models. The comparison CSV includes unrounded metrics, seed standard deviations
+and both matched controls. In the README table, each pair reads **fusion / paper**.
 
-## RMSprop repeat
+```sh
+python mobilenetv2_study_one.py predict --model runs/study_one/global_topk_adam_seed42.keras --image path/to/print.jpg
+```
 
-A second RMSprop run with the same split, initial weights, and seeds reproduced all 3,444 per-image validation and test predictions. The augmented mean clean-image accuracy was **99.39%**, compared with **100.00%** in the original Study One. Seeds 42 and 44 scored 55/55. Seed 43 scored 54/55 and again misclassified the normal image `goodcylinder/IMG_8933.JPG` as defective.
-
-Repeat this check with `python mobilenetv2.py train --optimizer rmsprop --out rmsprop-repeat`.
-
-The project report is `MobileNetV2_Report.docx`.
+The editable report is `MobileNetV2_Report.docx`.
